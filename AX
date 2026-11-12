@@ -1,0 +1,185 @@
+-- ==========================================
+-- SCRIPT: AX (Wide Gun & ESP with x2zu UI)
+-- ==========================================
+
+-- โหลด UI Library ตามที่กำหนด
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/x2zu/OPEN-SOURCE-UI-ROBLOX/refs/heads/main/X2ZU%20UI%20ROBLOX%20OPEN%20SOURCE/DummyUi-leak-by-x2zu/fetching-main/Tools/Framework.luau"))()
+
+-- สร้างหน้าต่าง Main Window ชื่อ AX (ปรับธีมเป็น Dark โทนม่วง)
+local Window = Library:Window({
+    Title = "AX [ Combat Hub ]",
+    Desc = "AX on top - Wide Gun & ESP",
+    Icon = 105059922903197,
+    Theme = "Dark",
+    Config = {
+        Keybind = Enum.KeyCode.LeftControl,
+        Size = UDim2.new(0, 500, 0, 400)
+    },
+    CloseUIButton = {
+        Enabled = true,
+        Text = "AX"
+    }
+})
+
+-- ตัวแปรควบคุมการทำงานของฟังก์ชัน
+local AXSettings = {
+    WideGun = false,
+    HitboxSize = 180, -- ค่าเริ่มต้นตามที่กำหนด (180)
+    BoxESP = false
+}
+
+-- สร้าง Tab สำหรับควบคุมฟังก์ชันหลัก
+local Tab = Window:Tab({Title = "Main", Icon = "star"}) do
+    Tab:Section({Title = "AX Combat Features"})
+
+    -- Toggle เปิด-ปิดระบบยิงวงกว้าง
+    Tab:Toggle({
+        Title = "Wide Gun Damage",
+        Desc = "ขยายดาเมจและ Hitbox ยิงกระจายวงกว้างโดยยังหมุนจออิสระ",
+        Value = false,
+        Callback = function(v)
+            AXSettings.WideGun = v
+        end
+    })
+
+    -- Slider ปรับขนาดวงเป้า (เริ่มต้นที่ 180)
+    Tab:Slider({
+        Title = "Target Radius Size",
+        Min = 20,
+        Max = 350,
+        Rounding = 0,
+        Value = 180,
+        Callback = function(val)
+            AXSettings.HitboxSize = val
+        end
+    })
+
+    -- Toggle เปิด-ปิดระบบมองทะลุกำแพง
+    Tab:Toggle({
+        Title = "White Box ESP",
+        Desc = "มองเห็นศัตรูทะลุกำแพงเป็นกรอบสี่เหลี่ยมสีขาว",
+        Value = false,
+        Callback = function(v)
+            AXSettings.BoxESP = v
+        end
+    })
+end
+
+Window:Line()
+
+-- Tab การตั้งค่าเพิ่มเติม
+local Extra = Window:Tab({Title = "Settings", Icon = "wrench"}) do
+    Extra:Section({Title = "Config & Control"})
+    Extra:Button({
+        Title = "Unload UI",
+        Desc = "ปิดและลบเมนูสคริปต์ออกจากหน้าจอ",
+        Callback = function()
+            Window:Notify({
+                Title = "AX Hub",
+                Desc = "Unloaded successfully!",
+                Time = 2
+            })
+            task.wait(0.5)
+            game:GetService("CoreGui"):FindFirstChild("AX_Hub_GUI"):Destroy()
+        end
+    })
+end
+
+-- แจ้งเตือนเมื่อโหลดสคริปต์สำเร็จ
+Window:Notify({
+    Title = "AX Hub",
+    Desc = "Loaded successfully! Default Radius: 180",
+    Time = 4
+})
+
+-- ==========================================
+-- SYSTEM LOGIC (Drawing & RenderStepped)
+-- ==========================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- สร้างวงกลมเป้าเล็งกลางจอ (สีสายรุ้งเรนโบว์หมุนเปลี่ยนสีต่อเนื่อง)
+local RainbowCircle = Drawing.new("Circle")
+RainbowCircle.Thickness = 2
+RainbowCircle.NumSides = 64
+RainbowCircle.Filled = false
+RainbowCircle.Visible = false
+
+-- ระบบเก็บข้อมูล ESP กรอบสีขาว
+local ESPBoxes = {}
+Players.PlayerRemoving:Connect(function(player)
+    if ESPBoxes[player] then
+        ESPBoxes[player]:Remove()
+        ESPBoxes[player] = nil
+    end
+end)
+
+local hue = 0
+
+-- ลูปการทำงานหลักทุกๆ เฟรม
+RunService.RenderStepped:Connect(function(dt)
+    -- อัปเดตสีสายรุ้ง (Rainbow Color Shift) ทุกๆ เฟรม
+    hue = (hue + dt * 0.5) % 1
+    RainbowCircle.Color = Color3.fromHSV(hue, 1, 1)
+
+    -- อัปเดตตำแหน่งและขนาดวงเป้ากลางจอ
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    RainbowCircle.Position = screenCenter
+    RainbowCircle.Radius = AXSettings.HitboxSize
+    RainbowCircle.Visible = AXSettings.WideGun
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+
+            if hrp and hum and hum.Health > 0 then
+                -- 1. ระบบยิงวงกว้าง (ขยาย Hitbox ตามขนาดที่ปรับ เริ่มต้น 180 โดยหมุนจอได้อิสระ)
+                if AXSettings.WideGun then
+                    local scale = math.clamp(AXSettings.HitboxSize / 2, 20, 160)
+                    hrp.Size = Vector3.new(scale, scale, scale)
+                    hrp.Transparency = 0.95
+                    hrp.CanCollide = false
+                else
+                    hrp.Size = Vector3.new(2, 2, 1)
+                    hrp.Transparency = 1
+                end
+
+                -- 2. ระบบ White Box ESP (มองทะลุกำแพง กรอบสี่เหลี่ยมสีขาว)
+                if AXSettings.BoxESP then
+                    if not ESPBoxes[player] then
+                        local box = Drawing.new("Square")
+                        box.Color = Color3.fromRGB(255, 255, 255)
+                        box.Thickness = 1.5
+                        box.Filled = false
+                        ESPBoxes[player] = box
+                    end
+
+                    local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                    if onScreen then
+                        local scaleFactor = 1 / (pos.Z * math.tan(math.rad(Camera.FieldOfView * 0.5)) * 2) * 1000
+                        local width = math.floor(4 * scaleFactor)
+                        local height = math.floor(5.5 * scaleFactor)
+
+                        ESPBoxes[player].Size = Vector2.new(width, height)
+                        ESPBoxes[player].Position = Vector2.new(pos.X - width / 2, pos.Y - height / 2)
+                        ESPBoxes[player].Visible = true
+                    else
+                        ESPBoxes[player].Visible = false
+                    end
+                else
+                    if ESPBoxes[player] then
+                        ESPBoxes[player].Visible = false
+                    end
+                end
+            else
+                if ESPBoxes[player] then
+                    ESPBoxes[player].Visible = false
+                end
+            end
+        end
+    end
+end)
